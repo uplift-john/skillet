@@ -1,5 +1,9 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useUser } from "@clerk/nextjs";
+import { COLORS, Char, ChunkyButton } from "./brand";
+import LoginWall from "./LoginWall";
+import Paywall from "./Paywall";
 
 // Inline icon components (replaces lucide-react to avoid bundling/named-export issues)
 const Copy = ({ size = 16, ...p }) => (
@@ -19,18 +23,7 @@ const Flame = ({ size = 16, ...p }) => (
   </svg>
 );
 
-// ─────────────────────────────────────────────────────────────────────────────
-// BRAND TOKENS
-// ─────────────────────────────────────────────────────────────────────────────
-const COLORS = {
-  charBlack: "#1A1A1A",
-  hotPink: "#FF2E6E",
-  emberOrange: "#FF6B1A",
-  infernoBlue: "#2E7BFF",
-  cream: "#F5EDE0",
-  greaseGold: "#E8B84E",
-  dimEmber: "#8A4A2A",
-};
+// COLORS, Char, ChunkyButton imported from ./brand
 
 // Inject Google Fonts once
 const FontLoader = () => {
@@ -74,180 +67,7 @@ const FontLoader = () => {
   return null;
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CHAR — the mascot. SVG flame with two eyes, no mouth.
-// Color and shape ARE the expression.
-// ─────────────────────────────────────────────────────────────────────────────
-const CHAR_MOODS = {
-  idle: { color: COLORS.hotPink, glow: COLORS.hotPink, scale: 1, eyeOffset: 0, jagged: 0 },
-  listening: { color: COLORS.emberOrange, glow: COLORS.emberOrange, scale: 1.08, eyeOffset: 2, jagged: 0 },
-  thinking: { color: COLORS.emberOrange, glow: COLORS.hotPink, scale: 1.18, eyeOffset: 0, jagged: 0.3 },
-  approving: { color: COLORS.greaseGold, glow: COLORS.greaseGold, scale: 1.05, eyeOffset: -1, jagged: 0 },
-  disappointed: { color: COLORS.dimEmber, glow: COLORS.dimEmber, scale: 0.85, eyeOffset: 3, jagged: 0 },
-  furious: { color: COLORS.infernoBlue, glow: COLORS.infernoBlue, scale: 1.35, eyeOffset: -2, jagged: 0.7 },
-};
-
-function Char({ mood = "idle", size = 96, withSkillet = true, sparks = false }) {
-  const m = CHAR_MOODS[mood] || CHAR_MOODS.idle;
-  const flickerDuration = mood === "furious" ? 0.35 : mood === "thinking" ? 0.6 : 1.4;
-
-  // Two flame paths we morph between for natural flicker
-  const calmPath =
-    "M50 95 C 22 95, 14 70, 22 52 C 28 38, 34 42, 36 30 C 38 18, 46 12, 50 5 C 54 12, 62 18, 64 30 C 66 42, 72 38, 78 52 C 86 70, 78 95, 50 95 Z";
-  const tallPath =
-    "M50 96 C 20 96, 10 68, 20 46 C 28 30, 32 36, 34 22 C 36 10, 46 4, 50 -2 C 54 4, 64 10, 66 22 C 68 36, 72 30, 80 46 C 90 68, 80 96, 50 96 Z";
-  const jaggedPath =
-    "M50 96 C 18 96, 8 70, 18 48 C 24 34, 30 44, 30 28 C 34 22, 36 12, 42 6 C 46 14, 50 0, 54 8 C 58 14, 62 4, 66 22 C 68 36, 76 32, 82 48 C 92 70, 82 96, 50 96 Z";
-
-  const innerColor = mood === "furious" ? "#9DC4FF" : mood === "approving" ? "#FFE9A8" : "#FFD4A8";
-
-  // State-driven path swap (avoids Framer Motion v11 + Next.js issue with animated d attr)
-  const [pathFrame, setPathFrame] = useState(0);
-  useEffect(() => {
-    const interval = setInterval(() => setPathFrame((f) => f + 1), flickerDuration * 650);
-    return () => clearInterval(interval);
-  }, [flickerDuration]);
-
-  // Layout: flame floats ABOVE the skillet with a small gap. Total height = flame + gap + skillet.
-  const skilletH = withSkillet ? Math.round(size * 0.22) : 0;
-  const gap = withSkillet ? Math.round(size * 0.04) : 0;
-  const flameH = Math.round(size * 1.15);
-  const wrapperH = flameH + gap + skilletH;
-
-  return (
-    <div
-      className="relative inline-block"
-      style={{ width: size, height: wrapperH, lineHeight: 0 }}
-    >
-      {/* FLAME LAYER — floats above the skillet */}
-      <div className="absolute" style={{ left: 0, top: 0, width: size, height: flameH }}>
-        {/* sparks burst */}
-        <AnimatePresence>
-          {sparks && (
-            <>
-              {[...Array(8)].map((_, i) => {
-                const angle = (i / 8) * Math.PI * 2;
-                return (
-                  <motion.div
-                    key={i}
-                    initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
-                    animate={{
-                      x: Math.cos(angle) * size * 0.9,
-                      y: Math.sin(angle) * size * 0.9,
-                      opacity: 0,
-                      scale: 0.3,
-                    }}
-                    transition={{ duration: 0.7, ease: "easeOut" }}
-                    className="absolute rounded-full pointer-events-none"
-                    style={{
-                      left: "50%",
-                      top: "40%",
-                      width: 6,
-                      height: 6,
-                      background: COLORS.greaseGold,
-                      boxShadow: `0 0 8px ${COLORS.hotPink}`,
-                    }}
-                  />
-                );
-              })}
-            </>
-          )}
-        </AnimatePresence>
-
-        {/* glow halo */}
-        <motion.div
-          className="absolute inset-0 rounded-full pointer-events-none"
-          style={{
-            background: `radial-gradient(circle at 50% 55%, ${m.glow}55 0%, transparent 60%)`,
-            filter: "blur(8px)",
-          }}
-          animate={{ scale: [1, 1.15, 1], opacity: [0.7, 1, 0.7] }}
-          transition={{ duration: flickerDuration * 1.5, repeat: Infinity }}
-        />
-
-        {/* the flame body */}
-        <motion.svg
-          viewBox="0 0 100 100"
-          className="absolute inset-0 w-full h-full overflow-visible"
-          style={{ transformOrigin: "50% 95%" }}
-          animate={{
-            scale: [m.scale, m.scale * 1.04, m.scale * 0.98, m.scale],
-            rotate: mood === "furious" ? [-3, 3, -2, 3, -3] : [-1, 1.2, -0.8, 1, -1],
-          }}
-          transition={{ duration: flickerDuration, repeat: Infinity, ease: "easeInOut" }}
-        >
-          <defs>
-            <radialGradient id={`flame-${mood}`} cx="50%" cy="70%" r="50%">
-              <stop offset="0%" stopColor={innerColor} />
-              <stop offset="60%" stopColor={m.color} />
-              <stop offset="100%" stopColor={m.color} />
-            </radialGradient>
-          </defs>
-          <path
-            fill={`url(#flame-${mood})`}
-            d={
-              mood === "furious"
-                ? (pathFrame % 2 === 0 ? jaggedPath : tallPath)
-                : mood === "thinking"
-                ? (pathFrame % 2 === 0 ? tallPath : calmPath)
-                : mood === "disappointed"
-                ? calmPath
-                : (pathFrame % 2 === 0 ? calmPath : tallPath)
-            }
-            style={{ transition: `d ${flickerDuration * 0.65}s ease-in-out` }}
-          />
-          {/* eyes */}
-          <g style={{ transform: `translateY(${m.eyeOffset}px)` }}>
-            <ellipse cx="40" cy="60" rx="5" ry={mood === "furious" ? 7 : 5.5} fill={COLORS.charBlack} />
-            <ellipse cx="60" cy="60" rx="5" ry={mood === "furious" ? 7 : 5.5} fill={COLORS.charBlack} />
-            <circle cx="41.5" cy="58" r="1.3" fill={COLORS.cream} />
-            <circle cx="61.5" cy="58" r="1.3" fill={COLORS.cream} />
-            {(mood === "furious" || mood === "disappointed") && (
-              <>
-                <path
-                  d={mood === "furious" ? "M32 50 L46 56" : "M32 56 L46 52"}
-                  stroke={COLORS.charBlack}
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                />
-                <path
-                  d={mood === "furious" ? "M68 50 L54 56" : "M68 56 L54 52"}
-                  stroke={COLORS.charBlack}
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                />
-              </>
-            )}
-          </g>
-        </motion.svg>
-      </div>
-
-      {/* SKILLET — separate, sitting BELOW the flame with a small gap */}
-      {withSkillet && (
-        <svg
-          viewBox="0 0 168 28"
-          aria-hidden="true"
-          className="absolute pointer-events-none"
-          style={{
-            left: -size * 0.2,
-            bottom: 0,
-            width: size * 1.4,
-            height: skilletH,
-          }}
-        >
-          {/* handle */}
-          <rect x="116" y="11" width="48" height="6" rx="3" fill="#0E0E0E" />
-          <rect x="156" y="9" width="10" height="10" rx="2" fill="#0E0E0E" />
-          {/* pan body */}
-          <ellipse cx="60" cy="14" rx="58" ry="10" fill="#0E0E0E" />
-          <ellipse cx="60" cy="11" rx="52" ry="6" fill="#222" opacity="0.6" />
-          {/* shine */}
-          <ellipse cx="42" cy="9" rx="14" ry="1.6" fill="#3a3a3a" opacity="0.7" />
-        </svg>
-      )}
-    </div>
-  );
-}
+// Char component imported from ./brand
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SCENARIOS — the 5 hardcoded scenarios with full content
@@ -1192,31 +1012,7 @@ function buildGenericLayer3(answers, freeText, level) {
   return { bullets, prompt, promptIntro, bulletsIntro, topic };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// REUSABLE COMPONENTS
-// ─────────────────────────────────────────────────────────────────────────────
-function ChunkyButton({ children, onClick, color = COLORS.hotPink, textColor = COLORS.cream, full = false, size = "lg", disabled }) {
-  const padding = size === "lg" ? "px-7 py-4 text-lg" : size === "md" ? "px-5 py-3 text-base" : "px-4 py-2 text-sm";
-  return (
-    <motion.button
-      onClick={onClick}
-      disabled={disabled}
-      whileTap={disabled ? {} : { y: 4, boxShadow: `0 0px 0 ${COLORS.charBlack}` }}
-      whileHover={disabled ? {} : { y: -1 }}
-      transition={{ type: "spring", stiffness: 600, damping: 25 }}
-      className={`relative font-display ${padding} rounded-xl border-2 select-none ${full ? "w-full" : ""} ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-      style={{
-        background: color,
-        color: textColor,
-        borderColor: COLORS.charBlack,
-        boxShadow: `4px 4px 0 ${COLORS.charBlack}`,
-        textShadow: "none",
-      }}
-    >
-      {children}
-    </motion.button>
-  );
-}
+// ChunkyButton imported from ./brand
 
 function ProgressFlames({ current, total = 4 }) {
   return (
@@ -1309,7 +1105,7 @@ function KitchenTicket({ name, score, note, delay = 0 }) {
 // MAIN APP
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Skillet() {
-  const [stage, setStage] = useState("landing"); // landing | question | thinking | verdict
+  const [stage, setStage] = useState("landing"); // landing | question | thinking | verdict | ratelimited
   const [freeText, setFreeText] = useState("");
   const [questionIdx, setQuestionIdx] = useState(0);
   const [answers, setAnswers] = useState({});
@@ -1321,7 +1117,25 @@ export default function Skillet() {
   const [emptyShake, setEmptyShake] = useState(false);
   const [verdictId, setVerdictId] = useState(null);
   const [sparkBurst, setSparkBurst] = useState(false);
-  const [landingFocused, setLandingFocused] = useState(false); // drives Char color shift on input focus
+  const [landingFocused, setLandingFocused] = useState(false);
+
+  // ─── Auth + access gating state ───
+  const { isSignedIn, user: clerkUser } = useUser();
+  const [roastId, setRoastId] = useState(null); // Supabase roast ID from /api/roast
+  const [accessInfo, setAccessInfo] = useState(null); // { canRevealFull, used, limit }
+  const [gateView, setGateView] = useState(null); // null | "login" | "paywall"
+  const [revealLoading, setRevealLoading] = useState(false);
+  const [rateLimitMsg, setRateLimitMsg] = useState("");
+  const [errorToast, setErrorToast] = useState(null); // Char-voiced error message, auto-clears
+  const [anonSessionId] = useState(() => {
+    if (typeof window === "undefined") return null;
+    let id = localStorage.getItem("skillet_session_id");
+    if (!id) {
+      id = `anon_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      localStorage.setItem("skillet_session_id", id);
+    }
+    return id;
+  });
 
   const scorecardRef = useRef(null);
   const layer3Ref = useRef(null);
@@ -1341,18 +1155,21 @@ export default function Skillet() {
     return () => clearInterval(interval);
   }, [stage]);
 
-  // Compute & finalize verdict
+  // Compute & finalize verdict, then log to API
   useEffect(() => {
     if (stage !== "thinking") return;
-    const timer = setTimeout(() => {
+    let cancelled = false;
+
+    const timer = setTimeout(async () => {
       const matched = matchScenario(freeText);
       const score = computeFoolishness(answers, freeText);
       const level = levelFromScore(score);
-      const id = `v_${Date.now().toString(36)}_${matched || "generic"}`;
+      const localId = `v_${Date.now().toString(36)}_${matched || "generic"}`;
 
+      let verdictData;
       if (matched) {
         const sc = SCENARIOS[matched];
-        setVerdict({
+        verdictData = {
           isMatched: true,
           key: matched,
           mood: sc.mood,
@@ -1367,13 +1184,13 @@ export default function Skillet() {
           bullets: sc.bullets,
           promptIntro: sc.promptIntro,
           prompt: sc.prompt,
-        });
+        };
       } else {
         const lib = VERDICT_LIBRARY[level];
         const pick = lib.options[Math.floor(Math.random() * lib.options.length)];
         const generic = buildGenericScorecard(answers);
         const layer3 = buildGenericLayer3(answers, freeText, level);
-        setVerdict({
+        verdictData = {
           isMatched: false,
           key: "generic",
           mood: lib.mood,
@@ -1390,15 +1207,69 @@ export default function Skillet() {
           prompt: layer3.prompt,
           bulletsIntro: layer3.bulletsIntro,
           topic: layer3.topic,
-        });
+        };
       }
-      setVerdictId(id);
+
+      // Log to API + rate limit check
+      try {
+        const res = await fetch("/api/roast", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            inputText: freeText,
+            structuredAnswers: answers,
+            foolishnessScore: score,
+            verdictLevel: level,
+            verdictText: verdictData.verdict,
+            matchedScenario: matched || null,
+            anonymousSessionId: anonSessionId,
+          }),
+        });
+
+        if (cancelled) return;
+
+        if (res.status === 429) {
+          const data = await res.json();
+          setRateLimitMsg(data.message || "Easy, chef. Come back in a bit.");
+          setStage("ratelimited");
+          return;
+        }
+
+        if (res.ok) {
+          const data = await res.json();
+          setRoastId(data.roastId);
+          setAccessInfo(data.access);
+        } else if (res.status !== 429) {
+          // Non-rate-limit server error — verdict still shows, but log the issue.
+          // The Char-voiced error from the server is swallowed here intentionally:
+          // the verdict is the priority, and logging failure is non-critical.
+          console.error("Roast API returned", res.status);
+        }
+      } catch (err) {
+        // Network down / API unreachable — still show the verdict.
+        console.error("Roast API call failed:", err);
+      }
+
+      if (cancelled) return;
+      setVerdict(verdictData);
+      setVerdictId(localId);
       setStage("verdict");
       setSparkBurst(true);
       setTimeout(() => setSparkBurst(false), 700);
     }, 3400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [stage, answers, freeText, anonSessionId]);
+
+  // Auto-clear error toast
+  useEffect(() => {
+    if (!errorToast) return;
+    const timer = setTimeout(() => setErrorToast(null), 6000);
     return () => clearTimeout(timer);
-  }, [stage, answers, freeText]);
+  }, [errorToast]);
 
   // Auto-scroll on layer reveal
   useEffect(() => {
@@ -1450,6 +1321,12 @@ export default function Skillet() {
     setRevealLayer(1);
     setLoadingMsg(0);
     setVerdictId(null);
+    setRoastId(null);
+    setAccessInfo(null);
+    setGateView(null);
+    setRevealLoading(false);
+    setRateLimitMsg("");
+    setErrorToast(null);
   };
 
   const handleCopyPrompt = () => {
@@ -1466,7 +1343,105 @@ export default function Skillet() {
     navigator.clipboard.writeText(shareText);
     setShareCopied(true);
     setTimeout(() => setShareCopied(false), 2000);
+    // Log share to API (fire-and-forget)
+    if (roastId) {
+      fetch("/api/log-share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roastId }),
+      }).catch(() => {});
+    }
   };
+
+  // ─── Layer 2/3 reveal with auth + usage gating ───
+  const handleRevealLayer2 = useCallback(async () => {
+    // Anonymous user → show login wall
+    if (!isSignedIn) {
+      setGateView("login");
+      return;
+    }
+
+    setRevealLoading(true);
+    try {
+      const res = await fetch("/api/roast/reveal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roastId, layer: 2 }),
+      });
+
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        // Response wasn't JSON — server is in a bad state
+        throw new Error("Bad response from server");
+      }
+
+      if (data.loginRequired) {
+        // Session expired mid-roast — show login wall
+        setGateView("login");
+        return;
+      }
+      if (data.paywall) {
+        setAccessInfo({ canRevealFull: false, used: data.used, limit: data.limit });
+        setGateView("paywall");
+        return;
+      }
+      if (data.allowed) {
+        setAccessInfo({ canRevealFull: true, used: data.used, limit: data.limit });
+        setRevealLayer(2);
+        setGateView(null);
+        return;
+      }
+
+      // Server returned a non-allowed response with a message
+      if (data.message) {
+        setErrorToast(data.message);
+      } else {
+        setErrorToast("Char's notebook is on fire. Try again in a minute.");
+      }
+    } catch (err) {
+      console.error("Reveal API failed:", err);
+      // Network down or server unreachable — let them through (soft gate)
+      setRevealLayer(2);
+      setGateView(null);
+    } finally {
+      setRevealLoading(false);
+    }
+  }, [isSignedIn, roastId]);
+
+  // When user signs in via modal, clear the login wall and auto-reveal
+  useEffect(() => {
+    if (isSignedIn && gateView === "login") {
+      setGateView(null);
+      handleRevealLayer2();
+    }
+  }, [isSignedIn, gateView, handleRevealLayer2]);
+
+  const handleRevealLayer3 = useCallback(async () => {
+    // Layer 3 doesn't consume an extra credit — they already paid at Layer 2
+    try {
+      await fetch("/api/roast/reveal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roastId, layer: 3 }),
+      });
+    } catch {
+      // Non-critical tracking
+    }
+    setRevealLayer(3);
+  }, [roastId]);
+
+  const handleJoinWaitlist = useCallback(async () => {
+    const res = await fetch("/api/waitlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.message || "Failed to join waitlist");
+    }
+  }, []);
 
   return (
     <div
@@ -1478,6 +1453,29 @@ export default function Skillet() {
       }}
     >
       <FontLoader />
+
+      {/* Error toast — Char-voiced, auto-dismisses */}
+      <AnimatePresence>
+        {errorToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -40 }}
+            transition={{ type: "spring", stiffness: 400, damping: 25 }}
+            className="fixed top-4 left-1/2 z-50 max-w-md w-[90vw] px-5 py-4 rounded-xl font-display text-sm sm:text-base"
+            style={{
+              transform: "translateX(-50%)",
+              background: COLORS.emberOrange,
+              color: COLORS.cream,
+              border: `2px solid ${COLORS.charBlack}`,
+              boxShadow: `4px 4px 0 ${COLORS.charBlack}`,
+            }}
+            onClick={() => setErrorToast(null)}
+          >
+            {errorToast}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Subtle grain overlay */}
       <div
@@ -1722,6 +1720,50 @@ export default function Skillet() {
             </motion.div>
           )}
 
+          {/* ───── RATE LIMITED ───── */}
+          {stage === "ratelimited" && (
+            <motion.div
+              key="ratelimited"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="pt-8 sm:pt-16 flex flex-col items-center text-center"
+            >
+              <div className="mb-6">
+                <Char mood="disappointed" size={90} />
+              </div>
+
+              <h1
+                className="font-display mb-4"
+                style={{
+                  fontSize: "clamp(36px, 8vw, 56px)",
+                  lineHeight: 0.92,
+                  color: COLORS.emberOrange,
+                }}
+              >
+                "Easy, chef."
+              </h1>
+
+              <p
+                className="font-display text-xl sm:text-2xl mb-8 max-w-md mx-auto"
+                style={{ color: COLORS.cream, opacity: 0.9, lineHeight: 1.2 }}
+              >
+                {rateLimitMsg || "10 ideas in an hour is a lot of bad ideas. Come back in a bit. Or sign in if you're serious about this."}
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-3">
+                {!isSignedIn && (
+                  <ChunkyButton onClick={() => window.location.href = "/sign-in"} color={COLORS.hotPink}>
+                    Sign in
+                  </ChunkyButton>
+                )}
+                <ChunkyButton onClick={handleRestart} color={COLORS.emberOrange}>
+                  Back to the kitchen
+                </ChunkyButton>
+              </div>
+            </motion.div>
+          )}
+
           {/* ───── VERDICT ───── */}
           {stage === "verdict" && verdict && (
             <motion.div
@@ -1770,15 +1812,19 @@ export default function Skillet() {
                 {verdict.roast}
               </motion.p>
 
-              {revealLayer === 1 && (
+              {revealLayer === 1 && !gateView && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 1.0 }}
                   className="flex flex-col items-center gap-3"
                 >
-                  <ChunkyButton onClick={() => setRevealLayer(2)} color={COLORS.hotPink}>
-                    {verdict.revealCta} →
+                  <ChunkyButton
+                    onClick={handleRevealLayer2}
+                    color={COLORS.hotPink}
+                    disabled={revealLoading}
+                  >
+                    {revealLoading ? "Checking..." : `${verdict.revealCta} →`}
                   </ChunkyButton>
                   {/* ghost outline hint */}
                   <motion.div
@@ -1793,6 +1839,20 @@ export default function Skillet() {
                     [ there's more below ]
                   </p>
                 </motion.div>
+              )}
+
+              {/* LOGIN WALL — anonymous user trying to see Layer 2/3 */}
+              {revealLayer === 1 && gateView === "login" && (
+                <LoginWall onClose={() => setGateView(null)} />
+              )}
+
+              {/* PAYWALL — free user exhausted monthly limit */}
+              {revealLayer === 1 && gateView === "paywall" && (
+                <Paywall
+                  used={accessInfo?.used || 3}
+                  onJoinWaitlist={handleJoinWaitlist}
+                  onBack={() => { setGateView(null); handleRestart(); }}
+                />
               )}
 
               {/* LAYER 2 — SCORECARD */}
@@ -1871,7 +1931,7 @@ export default function Skillet() {
                         transition={{ delay: verdict.scorecard.length * 0.1 + 0.5 }}
                         className="flex justify-center mt-7"
                       >
-                        <ChunkyButton onClick={() => setRevealLayer(3)} color={COLORS.emberOrange}>
+                        <ChunkyButton onClick={handleRevealLayer3} color={COLORS.emberOrange}>
                           {verdict.layer3Cta} →
                         </ChunkyButton>
                       </motion.div>
