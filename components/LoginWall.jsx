@@ -45,18 +45,10 @@ export default function LoginWall({ onClose }) {
         </p>
 
         {/* Sign in button — Clerk modal keeps app state intact */}
-        <SignInButton mode="modal" forceRedirectUrl={window.location.href}>
-          <button
-            className="font-display px-7 py-4 text-lg rounded-xl border-2 select-none cursor-pointer"
-            style={{
-              background: COLORS.hotPink,
-              color: COLORS.cream,
-              borderColor: COLORS.charBlack,
-              boxShadow: `4px 4px 0 ${COLORS.charBlack}`,
-            }}
-          >
+        <SignInButton mode="modal">
+          <ChunkyButton color={COLORS.hotPink} size="lg">
             Sign in with Google
-          </button>
+          </ChunkyButton>
         </SignInButton>
 
         {/* Why link */}
